@@ -1,0 +1,13 @@
+# 執行期產生的資料（含實際文章內容/機敏資訊，不應該進 git）
+sessions/
+backups/
+factcheck_exports/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# OS
+.DS_Store
+Thumbs.db
