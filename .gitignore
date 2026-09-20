@@ -3,6 +3,9 @@ sessions/
 backups/
 factcheck_exports/
 
+# 環境變數
+.env
+
 # Python
 __pycache__/
 *.pyc

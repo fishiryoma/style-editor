@@ -51,7 +51,13 @@ pip install -r requirements.txt --break-system-packages
 
 到 https://aistudio.google.com/apikey 用 Google 帳號登入，建立一組免費的 Gemini API Key。
 
-打開專案根目錄的 `.env`（`<你的部落格專案資料夾>\.env`），把這行改成你的 Key：
+複製 [`​.env.example`](./.env.example) 到**上一層**（你的部落格專案根目錄），改名成 `.env`：
+
+```powershell
+cp .env.example ../.env
+```
+
+打開 `<你的部落格專案資料夾>\.env`，把 `GEMINI_API_KEY` 改成你的 Key：
 
 ```
 GEMINI_API_KEY=AIzaSy........
