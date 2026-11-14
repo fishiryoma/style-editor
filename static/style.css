@@ -442,16 +442,9 @@ body {
 .sec-card {
     background: #fff;
     border: 0.0625rem solid var(--border);
-    border-left: 0.25rem solid var(--border);
     border-radius: 0.5rem;
     margin-bottom: 0.875rem;
     overflow: hidden;
-}
-.sec-card.is-changed.is-accepted {
-    border-left-color: var(--accent);
-}
-.sec-card.is-changed.is-rejected {
-    border-left-color: var(--danger);
 }
 .sec-card.is-busy {
     opacity: 0.45;
@@ -463,17 +456,23 @@ body {
     flex-wrap: wrap;
     gap: 0.5rem;
     padding: 0.5rem 0.875rem;
-    background: var(--theme-soft);
+    background: #f3f3f1;
     border-bottom: 0.0625rem solid var(--border);
     font-size: 0.8125rem;
     line-height: 1.4;
+}
+.sec-card.is-changed.is-accepted .sec-head {
+    background: var(--theme-soft);
+}
+.sec-card.is-changed.is-rejected .sec-head {
+    background: #fbeae6;
 }
 .sec-no {
     flex: none;
     min-width: 1.375rem;
     height: 1.375rem;
     border-radius: 0.6875rem;
-    background: var(--theme);
+    background: #3a3a3a;
     color: #fff;
     font-size: 0.75rem;
     font-weight: 700;
@@ -493,13 +492,15 @@ body {
     background: #efece5;
     color: #555;
 }
-.sec-card.mode-rewrite .sec-mode {
-    background: #6b5b95;
-    color: #fff;
+/* 模式標籤（微調／段落重寫）：兩種模式同一個黃色系樣式 */
+.sec-mode {
+    background: #ffe27a;
+    color: #5a4500;
+    font-weight: 600;
 }
 .sec-card.is-changed .sec-stat {
-    background: var(--theme-strong);
-    color: var(--theme);
+    background: #fff;
+    color: #333;
     font-weight: 600;
 }
 .sec-actions {
@@ -543,9 +544,10 @@ body {
     line-height: 1.6;
 }
 .sec-note {
-    background: #f3f0f9;
-    border-left: 0.1875rem solid #6b5b95;
-    color: #47395f;
+    background: #fffbe8; /* 比句子醒目提示（#fff0a8）淡，避免搞混 */
+    border: 0.0625rem solid #f3e3a0;
+    color: #4a3d10;
+    border-radius: 0.375rem;
 }
 .sec-warn {
     background: #fff3e0;
@@ -575,22 +577,20 @@ body {
 .sec-compare {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 1rem;
 }
 .sec-col {
     min-width: 0;
-    padding: 0 0.75rem;
-    border-radius: 0.375rem;
+    padding: 0 1.25rem;
 }
 .sec-col-orig {
-    background: #faf8f4;
+    padding-left: 0;
     color: #666;
 }
 .sec-col-new {
-    background: #f2f7f4;
+    padding-right: 0;
+    border-left: 0.0625rem solid var(--border);
 }
 .sec-card.is-rejected .sec-col-orig {
-    background: #fff;
     color: inherit;
 }
 .sec-card.is-rejected .sec-col-new {
@@ -604,14 +604,8 @@ body {
     -webkit-box-decoration-break: clone;
     box-decoration-break: clone;
 }
-.sec-col-orig .sec-hl {
-    background: #fde2dc;
-}
-.sec-col-new .sec-hl {
+.sec-hl {
     background: #fff0a8;
-}
-.sec-card.is-rejected .sec-col-new .sec-hl {
-    background: #f1efe9;
 }
 .sec-col-label {
     position: sticky;
@@ -627,6 +621,14 @@ body {
 @media (max-width: 56.25rem) {
     .sec-compare {
         grid-template-columns: 1fr;
+    }
+    .sec-col {
+        padding: 0;
+    }
+    .sec-col-new {
+        border-left: none;
+        border-top: 0.0625rem solid var(--border);
+        margin-top: 0.75rem;
     }
 }
 
