@@ -58,18 +58,46 @@
                 <div id="editor" class="editor" style="display: none">
                     <div class="editor-header">
                         <h2 id="post-title"></h2>
-                        <div class="editor-actions">
-                            <button id="btn-prepare" class="btn btn-primary">
-                                開始 / 重新 AI 校對
-                            </button>
-                            <span id="summary" class="summary"></span>
-                            <button
-                                id="btn-apply"
-                                class="btn btn-danger"
-                                disabled
+                        <div class="editor-controls">
+                            <div
+                                id="mode-picker"
+                                class="mode-picker"
+                                title="整篇的預設模式；審查時每一段都可以再單獨改用另一種模式重跑"
                             >
-                                套用並覆蓋原文
-                            </button>
+                                <label>
+                                    <input
+                                        type="radio"
+                                        name="grammar-mode"
+                                        value="light"
+                                        checked
+                                    />
+                                    微調
+                                </label>
+                                <label>
+                                    <input
+                                        type="radio"
+                                        name="grammar-mode"
+                                        value="rewrite"
+                                    />
+                                    段落重寫
+                                </label>
+                            </div>
+                            <div class="editor-actions">
+                                <button
+                                    id="btn-prepare"
+                                    class="btn btn-primary"
+                                >
+                                    開始 / 重新 AI 校對
+                                </button>
+                                <span id="summary" class="summary"></span>
+                                <button
+                                    id="btn-apply"
+                                    class="btn btn-danger"
+                                    disabled
+                                >
+                                    套用並覆蓋原文
+                                </button>
+                            </div>
                         </div>
                     </div>
                     <div
@@ -98,9 +126,28 @@
                         只會刪除本機的審核進度檔案，不會動到 WordPress
                         資料庫裡的文章本身。
                     </p>
+                    <div class="manage-toolbar">
+                        <span id="manage-count" class="manage-count"></span>
+                        <button
+                            id="btn-delete-selected"
+                            type="button"
+                            class="btn btn-danger btn-sm"
+                            disabled
+                        >
+                            刪除選取
+                        </button>
+                    </div>
                     <table class="manage-table">
                         <thead>
                             <tr>
+                                <th class="col-check">
+                                    <input
+                                        id="manage-check-all"
+                                        type="checkbox"
+                                        title="全選／全不選"
+                                    />
+                                </th>
+                                <th class="col-no">#</th>
                                 <th>文章</th>
                                 <th>種類</th>
                                 <th>狀態</th>
@@ -116,11 +163,11 @@
         </div>
 
         <div id="redo-modal" class="modal" style="display: none">
-            <div class="modal-box">
-                <h3>要求重新調整</h3>
+            <div class="modal-box modal-redo">
+                <h2>要求重新調整這一段</h2>
                 <p class="modal-hint">
                     告訴 AI
-                    這段哪裡不對，例如：「這太書面語了，我平常不會這樣講」、「這個不是錯字，請保留原文」。
+                    這段哪裡不對，例如：「這太書面語了，我平常不會這樣講」、「第二句不是錯字，請保留原文」、「結論請放在最前面」。
                 </p>
                 <textarea
                     id="redo-instruction"

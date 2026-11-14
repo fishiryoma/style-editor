@@ -4,6 +4,7 @@ app.py
 
 有兩種獨立的「種類」(kind)，各自有自己的 session 檔案、備份、審核畫面，不會互相覆蓋：
     - grammar：日文文法校對，引擎是 Gemini API（呼叫 ai_corrector.py）。
+      以 H2 段落為單位（section_diff.py），每段可以選「微調」或「段落重寫」，整段採用或維持原文。
     - factcheck：事實查核／改寫，這支程式本身不呼叫任何 AI，只負責把文章內容匯出成
       檔案，實際的查證與改寫是在 Cowork 對話裡由 Claude 直接讀取匯出檔、上網查證後，
       把結果寫回 sessions/factcheck/{post_id}.json（跟這支程式共用同一套審核/套用/備份邏輯）。
@@ -24,6 +25,7 @@ from google.genai import errors as genai_errors
 
 import ai_corrector
 import html_diff
+import section_diff
 import wp_db
 
 BASE_DIR = Path(__file__).parent
@@ -43,7 +45,8 @@ BACKUP_DIR.mkdir(exist_ok=True)
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
-BATCH_SIZE = int(os.getenv("CORRECTION_BATCH_SIZE", "12"))
+# 重寫模式需要比較強的重組能力，可以在 .env 另外指定模型；沒設定就跟輕修用同一個。
+REWRITE_MODEL = os.getenv("GEMINI_REWRITE_MODEL") or MODEL
 # Gemini 免費方案是「每分鐘最多 N 次請求」。單次 /prepare 請求最多打這麼多次 API，
 # 打滿就先把已完成的部分存檔、回傳「請稍後再按一次繼續」，避免一次請求打太多次撞 429。
 GEMINI_RPM_LIMIT = int(os.getenv("GEMINI_RPM_LIMIT", "15"))
@@ -51,6 +54,11 @@ GEMINI_RPM_LIMIT = int(os.getenv("GEMINI_RPM_LIMIT", "15"))
 
 def _is_rate_limit_error(e) -> bool:
     return isinstance(e, genai_errors.ClientError) and getattr(e, "code", None) == 429
+
+
+# 日文校對 session 的格式版本。2 = 以 H2 段落為單位（sections）；舊版（沒有這個欄位）是以文字節點為單位。
+GRAMMAR_SCHEMA_VERSION = 2
+LEGACY_GRAMMAR_MESSAGE = "這份草稿是舊版格式（逐處審查），新版改成以 H2 段落為單位，請重新按「開始 AI 校對」。"
 
 _client = None
 
@@ -140,19 +148,51 @@ def session_to_node_records(session: dict):
     return records
 
 
+def is_v2_grammar(session: dict) -> bool:
+    return bool(session) and session.get("schema_version") == GRAMMAR_SCHEMA_VERSION
+
+
 def build_summary(session: dict):
-    """統計所有節點的 statuses，組成畫面上方顯示的變更件數摘要。"""
+    """組成畫面上方顯示的變更件數摘要。
+    - 日文校對（v2）：以段落計算——有修改的段落數、採用／維持原文各幾段、有幾段處理失敗。
+    - 事實查核（以及舊版日文校對）：統計所有節點的 statuses。
+    兩種都會有 total_changes / accepted / rejected，草稿管理頁面共用。
+    """
+    if is_v2_grammar(session):
+        sections = section_diff.parse_sections(session["raw_original_content"])
+        recs = session.get("sections") or []
+        changed = accepted = rejected = failed = 0
+        for sec in sections:
+            rec = recs[sec["index"]] if sec["index"] < len(recs) else None
+            info = section_diff.section_summary(sec, rec)
+            failed += 1 if info["failed"] else 0
+            if not info["changed"]:
+                continue
+            changed += 1
+            if rec.get("status") == "rejected":
+                rejected += 1
+            else:
+                accepted += 1
+        return {
+            "unit": "section",
+            "sections": len(sections),
+            "total_changes": changed,
+            "accepted": accepted,
+            "rejected": rejected,
+            "failed": failed,
+        }
+
     total = accepted = rejected = 0
-    for n in session["nodes"]:
+    for n in session.get("nodes") or []:
         if not n:
             continue
-        for s in n["statuses"]:
+        for st in n["statuses"]:
             total += 1
-            if s == "accepted":
+            if st == "accepted":
                 accepted += 1
             else:
                 rejected += 1
-    return {"total_changes": total, "accepted": accepted, "rejected": rejected}
+    return {"unit": "change", "total_changes": total, "accepted": accepted, "rejected": rejected}
 
 
 def default_title_check(title: str) -> dict:
@@ -187,8 +227,11 @@ def build_review_response(kind: str, session: dict):
     """/prepare、/review 等多個 API 共用，組出前端審核畫面需要的資料
     （diff HTML + 摘要 + 標題建議 + 是否已過期）。
     """
-    node_records = session_to_node_records(session)
-    review_html = html_diff.build_html(session["raw_original_content"], node_records, mode="review", kind=kind)
+    if kind == "grammar":
+        review_html = section_diff.render_review(session["raw_original_content"], session.get("sections") or [])
+    else:
+        node_records = session_to_node_records(session)
+        review_html = html_diff.build_html(session["raw_original_content"], node_records, mode="review", kind=kind)
     resp = {
         "post_id": session["post_id"],
         "kind": kind,
@@ -203,6 +246,7 @@ def build_review_response(kind: str, session: dict):
     # 畫面上也不需要顯示這塊，所以 factcheck 完全不回傳 title_check。
     if kind == "grammar":
         resp["title_check"] = session.get("title_check") or default_title_check(session["title"])
+        resp["mode"] = session.get("mode") or "light"
     stale = staleness_info(session)
     if stale:
         resp["stale"] = stale["stale"]
@@ -284,6 +328,30 @@ def api_delete_session(post_id, kind):
     return jsonify({"ok": True})
 
 
+@app.route("/api/sessions/delete", methods=["POST"])
+def api_delete_sessions_batch():
+    """「草稿管理」分頁的批次刪除：body 是 {"items": [{"kind": "grammar", "post_id": "6809"}, ...]}。
+    一樣只刪本機的草稿檔案，不動 WordPress。post_id 必須是純數字（就是檔名），避免組出奇怪的路徑。
+    """
+    body = request.get_json(silent=True) or {}
+    items = body.get("items")
+    if not isinstance(items, list) or not items:
+        return jsonify({"error": "沒有選取任何草稿"}), 400
+    deleted = skipped = 0
+    for it in items:
+        it = it if isinstance(it, dict) else {}
+        kind = it.get("kind")
+        post_id = str(it.get("post_id") or "")
+        if kind not in KINDS or not post_id.isdigit():
+            skipped += 1
+            continue
+        p = sess_dir_for(kind) / f"{post_id}.json"
+        if p.exists():
+            p.unlink()
+            deleted += 1
+    return jsonify({"ok": True, "deleted": deleted, "skipped": skipped})
+
+
 @app.route("/api/posts/<int:post_id>/<kind>/prepare", methods=["POST"])
 def api_prepare(post_id, kind):
     """對應「開始 / 重新」按鈕。grammar 跟 factcheck 的行為完全不同：
@@ -306,26 +374,91 @@ def api_prepare(post_id, kind):
 
     body = request.get_json(silent=True) or {}
     force = bool(body.get("force"))
+    mode = body.get("mode") or "light"
+    if mode not in section_diff.MODES:
+        return jsonify({"error": f"不支援的校對模式：{mode}"}), 400
 
     existing = load_session("grammar", post_id)
+    if existing and not is_v2_grammar(existing):
+        existing = None  # 舊版格式的草稿不能接續，直接重新開始
     if existing and not existing.get("grammar_complete", True):
         # 上次的校對還沒跑完（通常是撞到 Gemini 免費方案的速率限制）。
         # 只要文章內容沒有在期間被人動過，就自動接續，不會浪費已經校對好的部分；
         # 忽略 force——沒有必要因為使用者又點了一次「開始／重新」就把還沒送出的進度整篇丟掉重打。
         stale = staleness_info(existing)
-        if not (stale and stale["stale"]):
-            return _prepare_grammar(post_id, post, resume_session=existing)
-        # 內容已變更，既有的未完成進度對不上新內容，改成整篇重新開始
+        if not (stale and stale["stale"]) and existing.get("mode", "light") == mode:
+            return _prepare_grammar(post_id, post, mode, resume_session=existing)
+        # 內容已變更（或換了模式），既有的未完成進度不適用，改成整篇重新開始
     elif existing and not force:
         return jsonify(build_review_response("grammar", existing))
 
-    return _prepare_grammar(post_id, post)
+    return _prepare_grammar(post_id, post, mode)
 
 
-def _prepare_grammar(post_id, post, resume_session=None):
-    """校對一篇文章。單次呼叫最多打 GEMINI_RPM_LIMIT 次 Gemini API（避免撞到免費方案
-    「每分鐘限 N 次請求」的上限），還沒處理完的節點會標記成 `corrected=False` 並存檔，
-    下次呼叫時（resume_session 有帶值）會從沒完成的地方繼續，不會重打已經成功的部分。
+def _model_for(mode: str) -> str:
+    return REWRITE_MODEL if mode == "rewrite" else MODEL
+
+
+def _run_section(client, section, rec, budget, instruction=None):
+    """把一個段落送給 AI 並驗證結果，寫回 rec。格式驗證沒過、而且還有額度時，自動重試 1 次。
+    budget: {"left": 這次請求還能打幾次 API}，會被扣掉。
+    撞到 429 會直接往外丟，讓呼叫端停下來存檔；其他錯誤記在 rec["error"]，這段保留原文。
+    回傳 True 代表這段已經處理完（不論成功或失敗）；False 代表額度不夠、還沒處理。
+    """
+    mode = rec["mode"]
+    payload = section_diff.ai_payload(section)
+    previous = section_diff.result_to_ai_format(rec.get("result")) if instruction else None
+    best = None
+    last_error = None
+    attempted = False
+    for _attempt in range(2):
+        if budget["left"] <= 0:
+            break
+        budget["left"] -= 1
+        attempted = True
+        try:
+            parsed = ai_corrector.correct_section(
+                client, _model_for(mode), payload, mode, instruction=instruction, previous=previous
+            )
+        except Exception as e:
+            if _is_rate_limit_error(e):
+                raise
+            last_error = str(e)
+            continue
+        result, problems = section_diff.validate_result(section, parsed, mode)
+        if best is None or len(problems) < len(best[1]):
+            best = (result, problems)
+        if not problems:
+            break
+    if not attempted:
+        return False
+    if best is None:
+        rec.update({"result": None, "problems": [], "error": last_error or "未知的錯誤"})
+    else:
+        rec.update({"result": best[0], "problems": best[1], "error": None})
+    rec["status"] = "accepted"
+    rec["corrected"] = True
+    return True
+
+
+def _new_section_record(section, mode):
+    return {
+        "index": section["index"],
+        "heading": section["heading"],
+        "mode": mode,
+        "status": "accepted",
+        # 沒有任何日文文字的段落（例如只有圖片）不用送 AI，直接當作處理完
+        "corrected": not section_diff.section_needs_ai(section),
+        "result": None,
+        "problems": [],
+        "error": None,
+    }
+
+
+def _prepare_grammar(post_id, post, mode, resume_session=None):
+    """以 H2 段落為單位校對一篇文章，一段打一次 API。單次呼叫最多打 GEMINI_RPM_LIMIT 次
+    （避免撞到免費方案「每分鐘限 N 次請求」的上限），還沒處理完的段落標記 corrected=False 並存檔，
+    下次呼叫時（resume_session 有帶值）從沒完成的地方繼續，不會重打已經成功的部分。
     """
     client = get_client()
     if client is None:
@@ -334,70 +467,52 @@ def _prepare_grammar(post_id, post, resume_session=None):
     if resume_session is not None:
         session = resume_session
         raw_content = session["raw_original_content"]
-        node_entries = session["nodes"]
+        sections = section_diff.parse_sections(raw_content)
     else:
         raw_content = post["content"]
-        soup, dom_nodes = html_diff.extract_nodes(raw_content)
-        node_entries = []  # 與 dom_nodes 一一對應（依 index），內容是 None 或 dict
-        for idx, dom_node in enumerate(dom_nodes):
-            original_text = str(dom_node)
-            protected, shortcode_map = html_diff.protect_shortcodes(original_text)
-            node_entries.append(
-                {
-                    "protected_original": protected,
-                    "protected_corrected": protected,  # 在 AI 回應回來前，先視為沒有變更
-                    "shortcode_map": shortcode_map,
-                    "statuses": [],
-                    "corrected": False,  # 是否已經送 AI 處理過（不論最後有沒有改動內容）
-                }
-            )
+        sections = section_diff.parse_sections(raw_content)
         session = {
+            "schema_version": GRAMMAR_SCHEMA_VERSION,
             "post_id": post_id,
             "title": post["title"],
             "slug": post["slug"],
             "raw_original_content": raw_content,
-            "nodes": node_entries,
+            "mode": mode,
+            "sections": [_new_section_record(sec, mode) for sec in sections],
             "title_check": None,
             "prepared_at": datetime.now().isoformat(timespec="seconds"),
             "applied": False,
             "grammar_complete": False,
         }
-
-    pending = [i for i, n in enumerate(node_entries) if not n.get("corrected", False)]
-    to_correct = [(i, node_entries[i]["protected_original"]) for i in pending]
+    records = session["sections"]
 
     errors = []
-    batches_done = 0
-    for i in range(0, len(to_correct), BATCH_SIZE):
-        if batches_done >= GEMINI_RPM_LIMIT:
-            break
-        chunk = to_correct[i : i + BATCH_SIZE]
-        batches_done += 1
+    budget = {"left": GEMINI_RPM_LIMIT}
+    rate_limited = False
+    for sec in sections:
+        rec = records[sec["index"]]
+        if rec.get("corrected"):
+            continue
         try:
-            results = ai_corrector.correct_nodes_batch(client, MODEL, chunk)
+            done = _run_section(client, sec, rec, budget)
         except Exception as e:
             if _is_rate_limit_error(e):
-                errors.append("Gemini 免費方案已達每分鐘請求上限，這批段落已保留原文，下次會自動繼續處理。")
+                errors.append("Gemini 免費方案已達每分鐘請求上限，還沒處理的段落已保留原文，下次會自動繼續處理。")
+                rate_limited = True
                 save_session("grammar", post_id, session)
-                break  # 已經被限流了，這次請求剩下的批次也一定會失敗，不用再浪費呼叫
-            errors.append(f"部分內容 AI 校正失敗，已保留原文：{e}")
-            save_session("grammar", post_id, session)
-            continue
-        for idx, corrected_protected in results.items():
-            rec = node_entries[idx]
-            rec["protected_corrected"] = corrected_protected
-            spans = html_diff.diff_spans(rec["protected_original"], corrected_protected)
-            rec["statuses"] = ["accepted"] * html_diff.count_changes(spans)
-            rec["corrected"] = True
+                break
+            raise
         save_session("grammar", post_id, session)
+        if not done:
+            break
 
-    remaining = [i for i, n in enumerate(node_entries) if not n.get("corrected", False)]
+    remaining = [r for r in records if not r.get("corrected")]
     if remaining:
         session["grammar_complete"] = False
         save_session("grammar", post_id, session)
         resp = build_review_response("grammar", session)
         progress = (
-            f"已完成 {len(node_entries) - len(remaining)}/{len(node_entries)} 段校正，"
+            f"已完成 {len(records) - len(remaining)}/{len(records)} 段校正，"
             f"已超過 Gemini 免費額度，請稍等約 1 分鐘後"
             f"再按一次「開始／重新」繼續校對剩下的 {len(remaining)} 段（已校對好的部分不會遺失）。"
         )
@@ -407,7 +522,7 @@ def _prepare_grammar(post_id, post, resume_session=None):
 
     # 內文全部校對完成，接著處理標題建議（如果還沒做過，且這次還有餘裕）
     if session.get("title_check") is None:
-        if batches_done >= GEMINI_RPM_LIMIT:
+        if budget["left"] <= 0 or rate_limited:
             session["grammar_complete"] = False
             save_session("grammar", post_id, session)
             resp = build_review_response("grammar", session)
@@ -437,6 +552,11 @@ def _prepare_grammar(post_id, post, resume_session=None):
     save_session("grammar", post_id, session)
 
     resp = build_review_response("grammar", session)
+    failed = [r for r in records if r.get("error") or r.get("problems")]
+    if failed:
+        errors.append(
+            f"有 {len(failed)} 段 AI 處理失敗或部分沒通過格式檢查，那些部分已保留原文，可以在該段按「重新調整」再試一次。"
+        )
     if errors:
         resp["warnings"] = errors
     return jsonify(resp)
@@ -491,100 +611,102 @@ def api_review(post_id, kind):
         if kind == "grammar":
             return jsonify({"error": "尚未產生校對建議，請先按「開始 AI 校對」"}), 404
         return jsonify({"error": "這篇文章還沒有查核結果，請先按「開始查核」匯出內容，再到 Cowork 對話請 Claude 查核。"}), 404
+    if kind == "grammar" and not is_v2_grammar(session):
+        return jsonify({"error": LEGACY_GRAMMAR_MESSAGE, "legacy": True}), 410
     return jsonify(build_review_response(kind, session))
 
 
-@app.route("/api/posts/<int:post_id>/<kind>/status", methods=["POST"])
-def api_status(post_id, kind):
-    """把某一個變更點（某節點內的其中一個 diff）切換成 accepted/rejected。
-    只有 grammar 支援：事實查核是筆記功能，沒有採用/維持原文的概念，畫面上也不會有按鈕
-    可以觸發這支 API，這裡擋一次是保險，避免直接打 API 造成困惑的行為。
-    """
+def _load_editable_grammar_session(post_id, kind):
+    """段落操作 API 共用的前置檢查。成功回傳 (session, None)，失敗回傳 (None, 錯誤回應)。"""
     if kind not in KINDS:
-        return jsonify({"error": f"不支援的種類：{kind}"}), 400
+        return None, (jsonify({"error": f"不支援的種類：{kind}"}), 400)
     if kind != "grammar":
-        return jsonify({"error": "事實查核沒有採用/維持原文的功能，直接看筆記自己判斷就好。"}), 400
-    session = load_session(kind, post_id)
+        return None, (jsonify({"error": "事實查核是筆記功能，沒有採用/維持原文或重新調整，直接看筆記自己判斷就好。"}), 400)
+    session = load_session("grammar", post_id)
     if not session:
-        return jsonify({"error": "找不到審核進度"}), 404
+        return None, (jsonify({"error": "找不到校對進度"}), 404)
+    if not is_v2_grammar(session):
+        return None, (jsonify({"error": LEGACY_GRAMMAR_MESSAGE}), 410)
     if session.get("applied"):
-        return jsonify({"error": "這份草稿已經套用覆蓋原文了，內容已經寫進 WordPress，不能再修改逐點的採用/維持原文。如需再調整，請重新產生一份新的校對。"}), 400
+        return None, (
+            jsonify({"error": "這份草稿已經套用覆蓋原文了，內容已經寫進 WordPress，不能再修改。如需再調整，請重新產生一份新的校對。"}),
+            400,
+        )
+    return session, None
+
+
+def _section_from_body(session, body):
+    sections = section_diff.parse_sections(session["raw_original_content"])
+    try:
+        idx = int(body.get("section_index"))
+        if idx < 0:
+            raise IndexError
+        return sections[idx], session["sections"][idx]
+    except (TypeError, ValueError, IndexError):
+        return None, None
+
+
+@app.route("/api/posts/<int:post_id>/<kind>/section/status", methods=["POST"])
+def api_section_status(post_id, kind):
+    """把某一個 H2 段落切換成 accepted（採用）/ rejected（維持原文）。"""
+    session, err = _load_editable_grammar_session(post_id, kind)
+    if err:
+        return err
     body = request.get_json(force=True)
-    node_index = int(body["node_index"])
-    change_index = int(body["change_index"])
-    status = body["status"]
+    status = body.get("status")
     if status not in ("accepted", "rejected"):
         return jsonify({"error": "status 必須是 accepted 或 rejected"}), 400
+    section, rec = _section_from_body(session, body)
+    if section is None:
+        return jsonify({"error": "section_index 超出範圍"}), 400
 
-    try:
-        node = session["nodes"][node_index]
-    except (IndexError, TypeError):
-        return jsonify({"error": "node_index 超出範圍"}), 400
-    if not node or change_index >= len(node["statuses"]):
-        return jsonify({"error": "change_index 超出範圍"}), 400
-
-    node["statuses"][change_index] = status
+    rec["status"] = status
     save_session(kind, post_id, session)
-    return jsonify({"ok": True, "summary": build_summary(session)})
+    return jsonify(
+        {"ok": True, "card_html": section_diff.render_section_card(section, rec), "summary": build_summary(session)}
+    )
 
 
 @app.route("/api/posts/<int:post_id>/<kind>/redo", methods=["POST"])
 def api_redo(post_id, kind):
-    """「要求重新調整」彈窗送出後呼叫。目前只有 grammar 支援：針對單一節點，
-    帶著使用者輸入的 instruction 再呼叫一次 Gemini 重新校正該節點。
-    factcheck 沒有 in-app 的 AI 可以即時重跑，畫面上也不會顯示這個按鈕，
-    這裡仍擋一次是為了保險（避免直接打 API 造成困惑的錯誤訊息）。
+    """重新處理一個 H2 段落。兩種用法：
+        - 「✎ 重新調整」：帶 instruction（使用者意見），沿用這段目前的模式，並把上一次的結果給 AI 參考。
+        - 「改用微調／段落重寫重跑」：帶 mode、不帶 instruction，用新的模式從原文重新處理這段。
+    只有 grammar 支援。factcheck 沒有 in-app 的 AI 可以即時重跑。
     """
-    if kind not in KINDS:
-        return jsonify({"error": f"不支援的種類：{kind}"}), 400
-    if kind != "grammar":
-        return jsonify({"error": "事實查核不支援「重新調整」，請回到 Cowork 對話請 Claude 針對這段再調整一次。"}), 400
-
+    session, err = _load_editable_grammar_session(post_id, kind)
+    if err:
+        return err
     client = get_client()
     if client is None:
         return jsonify({"error": "GEMINI_API_KEY 未設定"}), 400
 
-    session = load_session("grammar", post_id)
-    if not session:
-        return jsonify({"error": "找不到校對進度"}), 404
-    if session.get("applied"):
-        return jsonify({"error": "這份草稿已經套用覆蓋原文了，不能再要求重新調整。如需再調整，請重新產生一份新的校對。"}), 400
-
     body = request.get_json(force=True)
-    node_index = int(body["node_index"])
+    section, rec = _section_from_body(session, body)
+    if section is None:
+        return jsonify({"error": "section_index 超出範圍"}), 400
+    if not section_diff.section_needs_ai(section):
+        return jsonify({"error": "這段沒有需要校對的日文文字"}), 400
+
     instruction = (body.get("instruction") or "").strip()
-    if not instruction:
-        return jsonify({"error": "請輸入你希望怎麼調整"}), 400
+    mode = body.get("mode") or rec.get("mode") or "light"
+    if mode not in section_diff.MODES:
+        return jsonify({"error": f"不支援的校對模式：{mode}"}), 400
+    if mode != rec.get("mode"):
+        rec["result"] = None  # 換模式就從原文重新來，不參考另一種模式的結果
+    rec["mode"] = mode
 
     try:
-        node = session["nodes"][node_index]
-    except (IndexError, TypeError):
-        return jsonify({"error": "node_index 超出範圍"}), 400
-    if not node:
-        return jsonify({"error": "這個段落沒有校正紀錄"}), 400
-
-    try:
-        new_corrected = ai_corrector.correct_node_single(
-            client, MODEL, node["protected_original"], instruction, node["protected_corrected"]
-        )
+        _run_section(client, section, rec, {"left": 2}, instruction=instruction or None)
     except Exception as e:
+        if _is_rate_limit_error(e):
+            return jsonify({"error": "Gemini 免費方案已達每分鐘請求上限，請稍等約 1 分鐘再試。"}), 429
         return jsonify({"error": f"呼叫 AI 失敗：{e}"}), 500
-
-    node["protected_corrected"] = new_corrected
-    spans = html_diff.diff_spans(node["protected_original"], new_corrected)
-    node["statuses"] = ["accepted"] * html_diff.count_changes(spans)
     save_session("grammar", post_id, session)
 
-    fragment = html_diff.render_node(
-        node_index,
-        node["protected_original"],
-        node["protected_corrected"],
-        node["statuses"],
-        "review",
-        node["shortcode_map"],
-        kind="grammar",
+    return jsonify(
+        {"ok": True, "card_html": section_diff.render_section_card(section, rec), "summary": build_summary(session)}
     )
-    return jsonify({"ok": True, "fragment_html": fragment, "summary": build_summary(session)})
 
 
 @app.route("/api/posts/<int:post_id>/<kind>/title/select", methods=["POST"])
@@ -628,6 +750,10 @@ def api_apply(post_id, kind):
     session = load_session(kind, post_id)
     if not session:
         return jsonify({"error": "找不到審核進度"}), 404
+    if not is_v2_grammar(session):
+        return jsonify({"error": LEGACY_GRAMMAR_MESSAGE}), 410
+    if session.get("applied"):
+        return jsonify({"error": "這份草稿已經套用過了。"}), 400
     if not session.get("grammar_complete", True):
         return jsonify(
             {"error": "校對尚未完成，還有部分內容還沒送到 AI 校對，請先按「開始／重新」繼續完成校對，才能套用。"}
@@ -662,8 +788,7 @@ def api_apply(post_id, kind):
             }
         ), 409
 
-    node_records = session_to_node_records(session)
-    final_content = html_diff.build_html(session["raw_original_content"], node_records, mode="final", kind=kind)
+    final_content = section_diff.build_final_content(session["raw_original_content"], session["sections"])
 
     # 覆蓋前先備份原文（標題+內文），檔名帶上 kind 以區分是哪種校對/查核的備份
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")

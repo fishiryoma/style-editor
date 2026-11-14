@@ -3,6 +3,9 @@ html_diff.py
 從 HTML 中只抽出日文文字節點，把修正前後做 diff，
 組出審閱用 HTML（含 del/ins 標記）或最終確定的文字。
 
+目前只有「事實查核」用文字節點這套切法；日文校對改成以 H2 段落為單位，見 section_diff.py
+（diff_spans / count_changes / JP_RE / SHORTCODE_RE 兩邊共用）。
+
 WordPress 的 post_content 裡混雜著 Cocoon 佈景主題的簡碼（例: [box class="pink"]...[/box]），
 是原始文字的一部分，所以在送給 AI 之前，要先把 [...] 部分換成佔位符加以保護。
 """
@@ -124,21 +127,7 @@ def render_node_fragment(node_index, spans, statuses, mode, shortcode_map, kind=
             status = statuses[change_idx] if change_idx < len(statuses) else "accepted"
             orig = restore_shortcodes(sp["original"], shortcode_map)
             corr = restore_shortcodes(sp["corrected"], shortcode_map)
-            if mode == "review" and kind == "grammar":
-                # 日文校對：逐處可以採用/維持原文/要求重新調整
-                cid = f"{node_index}:{change_idx}"
-                cls = "accepted" if status == "accepted" else "rejected"
-                out.append(
-                    '<span class="tp-change ' + cls + '" data-cid="' + cid + '">'
-                    + '<del class="tp-del">' + html_lib.escape(orig) + '</del>'
-                    + '<ins class="tp-ins">' + html_lib.escape(corr) + '</ins>'
-                    + '<span class="tp-ctrl" contenteditable="false">'
-                    + '<button type="button" class="tp-btn tp-accept" title="採用する">&#10003;</button>'
-                    + '<button type="button" class="tp-btn tp-reject" title="元のままにする">&#10005;</button>'
-                    + '<button type="button" class="tp-btn tp-redo" title="この修正をやり直す">&#9998;</button>'
-                    + '</span></span>'
-                )
-            elif mode == "review":
+            if mode == "review":
                 # 事實查核：筆記功能，沒有採用/維持原文的概念，單純用刪除線+建議文字呈現，
                 # 不需要按鈕、也不需要點擊互動，テスさん自己看著判斷要不要動筆。
                 out.append(

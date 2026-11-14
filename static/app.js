@@ -1,8 +1,8 @@
 let currentKind = "grammar"; // "grammar" | "factcheck"（"manage" 分頁不算 kind，另外處理）
 let currentPostId = null;
 let currentPosts = [];
-let pendingRedoNodeIndex = null;
-let currentApplied = false; // 這份草稿是不是已經套用覆蓋原文了——套用後逐點的勾/叉/重新調整就該鎖起來
+let pendingRedoSectionIndex = null;
+let currentApplied = false; // 這份草稿是不是已經套用覆蓋原文了——套用後段落的採用/維持原文/重新調整就該鎖起來
 
 const el = (id) => document.getElementById(id);
 
@@ -167,24 +167,65 @@ async function selectPost(postId) {
     const post = currentPosts.find((p) => p.id === postId);
     el("post-title").textContent = post ? post.title : "";
     el("review-content").innerHTML = "";
-    el("review-content").classList.remove("is-applied");
+    el("review-content").classList.remove("is-applied", "sections");
     currentApplied = false;
     el("summary").textContent = "";
     updateApplyButtonVisibility();
     el("title-panel").style.display = "none";
+    // 先回到使用者慣用的模式；如果這篇已經有草稿，renderReview 會再換成草稿當初用的模式
+    setModePicker(safeStorageGet(MODE_STORAGE_KEY) === "rewrite" ? "rewrite" : "light");
 
     const res = await fetch(`/api/posts/${postId}/${currentKind}/review`);
     if (res.ok) {
         const data = await res.json();
         renderReview(data);
+    } else if (res.status === 410) {
+        // 舊版格式（逐處審查）的日文校對草稿，新版讀不了，請使用者重新校對
+        const data = await res.json().catch(() => ({}));
+        el("review-content").innerHTML =
+            `<p class="warnings">${escapeHtml(data.error || "這份草稿格式太舊，請重新校對。")}</p>`;
     } else {
         el("review-content").innerHTML = EMPTY_REVIEW_HINT[currentKind](postId);
+    }
+}
+
+// ── 日文校對模式（微調 / 段落重寫） ────────────────────────────────────
+
+const MODE_STORAGE_KEY = "style-editor:grammar-mode";
+
+function currentMode() {
+    const checked = document.querySelector('input[name="grammar-mode"]:checked');
+    return checked ? checked.value : "light";
+}
+
+function setModePicker(mode) {
+    const input = document.querySelector(
+        `input[name="grammar-mode"][value="${mode}"]`,
+    );
+    if (input) input.checked = true;
+}
+
+function safeStorageGet(key) {
+    try {
+        return localStorage.getItem(key);
+    } catch {
+        return null;
+    }
+}
+
+function safeStorageSet(key, value) {
+    try {
+        localStorage.setItem(key, value);
+    } catch {
+        /* 瀏覽器不允許存就算了，只是下次不會記住 */
     }
 }
 
 function renderReview(data) {
     el("post-title").textContent = data.title;
     el("review-content").innerHTML = data.review_html;
+    // 日文校對是一張張段落卡片，外層不需要再包一個白底框
+    el("review-content").classList.toggle("sections", currentKind === "grammar");
     currentApplied = !!data.applied;
     el("review-content").classList.toggle("is-applied", currentApplied);
     updateSummary(data.summary);
@@ -215,6 +256,7 @@ function renderReview(data) {
 
     // 事實查核不檢查標題，也不顯示這個區塊
     if (currentKind === "grammar") {
+        if (data.mode) setModePicker(data.mode); // 顯示這份草稿當初用的模式
         renderTitlePanel(data.title, data.title_check, data.applied);
     } else {
         el("title-panel").style.display = "none";
@@ -294,8 +336,9 @@ function updateSummary(summary) {
         return;
     }
     if (currentKind === "grammar") {
+        const failed = summary.failed ? `・${summary.failed} 段處理失敗` : "";
         el("summary").textContent =
-            `共 ${summary.total_changes} 處修改（採用 ${summary.accepted} ・維持原文 ${summary.rejected}）`;
+            `${summary.sections} 段中 ${summary.total_changes} 段有修改（採用 ${summary.accepted}・維持原文 ${summary.rejected}${failed}）`;
     } else {
         // 事實查核沒有採用/維持原文，單純顯示有幾處建議修改可以參考
         el("summary").textContent = summary.total_changes
@@ -306,16 +349,18 @@ function updateSummary(summary) {
 
 async function prepare(force) {
     if (!currentPostId) return;
+    const mode = currentMode();
     if (currentKind === "grammar") {
+        const label = mode === "rewrite" ? "段落重寫" : "微調";
         el("review-content").innerHTML =
-            '<p class="muted">AI 校對中，請稍候...（文章較長時可能需要一點時間）</p>';
+            `<p class="muted">AI 校對中（${label}），一段一段處理，請稍候...（文章較長時可能需要一點時間）</p>`;
     }
     const res = await fetch(
         `/api/posts/${currentPostId}/${currentKind}/prepare`,
         {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ force: !!force }),
+            body: JSON.stringify({ force: !!force, mode }),
         },
     );
     const data = await res.json();
@@ -358,29 +403,62 @@ async function prepare(force) {
     fetchPosts(el("search").value);
 }
 
-async function setStatus(nodeIndex, changeIndex, status, spanEl) {
-    spanEl.classList.remove("accepted", "rejected");
-    spanEl.classList.add(status);
+// ── 段落（H2）操作：採用 / 維持原文 / 重新調整 / 改用另一種模式重跑 ─────────
+
+function sectionCard(sectionIndex) {
+    return document.querySelector(
+        `.sec-card[data-section="${sectionIndex}"]`,
+    );
+}
+
+// 後端回傳更新後的整張段落卡片 HTML，直接替換掉畫面上那一張
+function replaceSectionCard(sectionIndex, cardHtml) {
+    const card = sectionCard(sectionIndex);
+    if (card) card.outerHTML = cardHtml;
+}
+
+async function setSectionStatus(sectionIndex, status) {
     const res = await fetch(
-        `/api/posts/${currentPostId}/${currentKind}/status`,
+        `/api/posts/${currentPostId}/${currentKind}/section/status`,
         {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                node_index: nodeIndex,
-                change_index: changeIndex,
-                status,
-            }),
+            body: JSON.stringify({ section_index: sectionIndex, status }),
         },
     );
-    if (res.ok) {
-        const data = await res.json();
-        updateSummary(data.summary);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+        await notifyModal(data.error || "更新失敗");
+        return;
     }
+    replaceSectionCard(sectionIndex, data.card_html);
+    updateSummary(data.summary);
 }
 
-function openRedoModal(nodeIndex) {
-    pendingRedoNodeIndex = nodeIndex;
+async function redoSection(sectionIndex, { instruction = "", mode = "" } = {}) {
+    const card = sectionCard(sectionIndex);
+    if (card) card.classList.add("is-busy");
+    const res = await fetch(`/api/posts/${currentPostId}/${currentKind}/redo`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            section_index: sectionIndex,
+            instruction,
+            mode: mode || undefined,
+        }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+        if (card) card.classList.remove("is-busy");
+        await notifyModal(data.error || "重新調整失敗");
+        return;
+    }
+    replaceSectionCard(sectionIndex, data.card_html);
+    updateSummary(data.summary);
+}
+
+function openRedoModal(sectionIndex) {
+    pendingRedoSectionIndex = sectionIndex;
     el("redo-instruction").value = "";
     el("redo-modal").style.display = "flex";
     el("redo-instruction").focus();
@@ -388,35 +466,15 @@ function openRedoModal(nodeIndex) {
 
 function closeRedoModal() {
     el("redo-modal").style.display = "none";
-    pendingRedoNodeIndex = null;
+    pendingRedoSectionIndex = null;
 }
 
 async function submitRedo() {
     const instruction = el("redo-instruction").value.trim();
-    if (!instruction || pendingRedoNodeIndex === null) return;
-    const nodeIndex = pendingRedoNodeIndex;
+    if (!instruction || pendingRedoSectionIndex === null) return;
+    const sectionIndex = pendingRedoSectionIndex;
     closeRedoModal();
-
-    const nodeEl = document.querySelector(
-        `.tp-node[data-node-index="${nodeIndex}"]`,
-    );
-    if (nodeEl) nodeEl.style.opacity = "0.4";
-
-    const res = await fetch(`/api/posts/${currentPostId}/${currentKind}/redo`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ node_index: nodeIndex, instruction }),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-        await notifyModal(data.error || "重新調整失敗");
-        if (nodeEl) nodeEl.style.opacity = "1";
-        return;
-    }
-    if (nodeEl) {
-        nodeEl.outerHTML = data.fragment_html;
-    }
-    updateSummary(data.summary);
+    await redoSection(sectionIndex, { instruction });
 }
 
 async function applyChanges() {
@@ -468,10 +526,43 @@ function switchTab(tab) {
     el("editor").style.display = "none";
     el("empty-state").style.display = "block";
     el("btn-prepare").textContent = PREPARE_LABEL[tab];
+    el("mode-picker").style.display = tab === "grammar" ? "" : "none";
     fetchPosts(el("search").value);
 }
 
 // ── Session 管理 ─────────────────────────────────────────────────
+
+function manageChangesLabel(it) {
+    const sm = it.summary;
+    if (it.kind !== "grammar") {
+        return `${sm ? sm.total_changes : 0} 處修改・${it.note_count || 0} 則筆記`;
+    }
+    if (!sm) return "-";
+    if (sm.unit === "section") {
+        return `採用 ${sm.accepted} / ${sm.total_changes} 段`;
+    }
+    return `${sm.accepted} / ${sm.total_changes}（舊版格式）`;
+}
+
+function manageCheckboxes() {
+    return [...el("manage-tbody").querySelectorAll("input.manage-check")];
+}
+
+// 依勾選狀態更新「刪除選取」按鈕、全選框、上方的數量文字
+function updateManageSelection() {
+    const boxes = manageCheckboxes();
+    const selected = boxes.filter((b) => b.checked).length;
+    const all = el("manage-check-all");
+    all.checked = boxes.length > 0 && selected === boxes.length;
+    all.indeterminate = selected > 0 && selected < boxes.length;
+    all.disabled = boxes.length === 0;
+    const btn = el("btn-delete-selected");
+    btn.disabled = selected === 0;
+    btn.textContent = selected ? `刪除選取（${selected}）` : "刪除選取";
+    el("manage-count").textContent = boxes.length
+        ? `共 ${boxes.length} 份草稿${selected ? `，已選 ${selected} 份` : ""}`
+        : "";
+}
 
 async function loadManageView() {
     const res = await fetch("/api/sessions");
@@ -479,29 +570,26 @@ async function loadManageView() {
     const tbody = el("manage-tbody");
     tbody.innerHTML = "";
     if (!items.length) {
-        tbody.innerHTML = `<tr><td colspan="6" class="muted">目前沒有任何校對／查核中的草稿。</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" class="muted">目前沒有任何校對／查核中的草稿。</td></tr>`;
+        updateManageSelection();
         return;
     }
-    for (const it of items) {
+    items.forEach((it, i) => {
         const tr = document.createElement("tr");
         const kindLabel = it.kind === "grammar" ? "日文校對" : "事實查核";
         const statusLabel =
             it.kind === "grammar" ? (it.applied ? "已套用" : "審核中") : "筆記";
-        const changes =
-            it.kind === "grammar"
-                ? it.summary
-                    ? `${it.summary.accepted} / ${it.summary.total_changes}`
-                    : "-"
-                : `${it.summary ? it.summary.total_changes : 0} 處修改・${it.note_count || 0} 則筆記`;
         tr.innerHTML = `
+      <td class="col-check"><input type="checkbox" class="manage-check" data-post="${escapeHtml(it.post_id)}" data-kind="${it.kind}"></td>
+      <td class="col-no">${i + 1}</td>
       <td>${escapeHtml(it.title || "")}</td>
       <td>${kindLabel}</td>
       <td>${statusLabel}</td>
       <td>${escapeHtml(formatDateTime(it.prepared_at))}</td>
-      <td>${changes}</td>
-      <td><button type="button" class="btn btn-danger btn-sm" data-post="${it.post_id}" data-kind="${it.kind}">刪除</button></td>`;
+      <td>${manageChangesLabel(it)}</td>
+      <td><button type="button" class="btn btn-danger btn-sm" data-post="${escapeHtml(it.post_id)}" data-kind="${it.kind}">刪除</button></td>`;
         tbody.appendChild(tr);
-    }
+    });
     tbody.querySelectorAll("button[data-post]").forEach((btn) => {
         btn.addEventListener("click", async () => {
             const ok = await confirmModal(
@@ -515,25 +603,65 @@ async function loadManageView() {
             loadManageView();
         });
     });
+    tbody
+        .querySelectorAll("input.manage-check")
+        .forEach((b) => b.addEventListener("change", updateManageSelection));
+    updateManageSelection();
+}
+
+async function deleteSelectedSessions() {
+    const selected = manageCheckboxes().filter((b) => b.checked);
+    if (!selected.length) return;
+    const ok = await confirmModal(
+        `確定要刪除選取的 ${selected.length} 份草稿嗎？（只會刪除本機的審核進度，不會動到 WordPress 裡的文章）`,
+    );
+    if (!ok) return;
+    const res = await fetch("/api/sessions/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            items: selected.map((b) => ({
+                kind: b.dataset.kind,
+                post_id: b.dataset.post,
+            })),
+        }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+        await notifyModal(data.error || "刪除失敗");
+    } else if (data.skipped) {
+        await notifyModal(
+            `已刪除 ${data.deleted} 份，另有 ${data.skipped} 份資料格式不對、沒有刪除。`,
+        );
+    }
+    loadManageView();
 }
 
 // ── 事件綁定 ───────────────────────────────────────
 
 document.addEventListener("click", (e) => {
-    const change = e.target.closest(".tp-change");
-    // 事實查核的 .tp-change 是純靜態刪除線呈現，沒有 data-cid，不需要（也不能）互動
-    if (!change || !change.dataset.cid) return;
-    // 已經套用覆蓋原文的草稿：內容早就寫進 WordPress 了，勾/叉/重新調整鎖起來不能再點，
+    const btn = e.target.closest(".sec-btn");
+    if (!btn) return;
+    const card = btn.closest(".sec-card");
+    if (!card || card.classList.contains("is-busy")) return;
+    // 已經套用覆蓋原文的草稿：內容早就寫進 WordPress 了，段落操作鎖起來不能再點，
     // 避免點了以為改到東西，其實只是在改一份已經作廢的紀錄。
     if (currentApplied) return;
-    const [nodeIndex, changeIndex] = change.dataset.cid.split(":").map(Number);
+    const sectionIndex = Number(card.dataset.section);
 
-    if (e.target.classList.contains("tp-accept")) {
-        setStatus(nodeIndex, changeIndex, "accepted", change);
-    } else if (e.target.classList.contains("tp-reject")) {
-        setStatus(nodeIndex, changeIndex, "rejected", change);
-    } else if (e.target.classList.contains("tp-redo")) {
-        openRedoModal(nodeIndex);
+    switch (btn.dataset.act) {
+        case "accept":
+            setSectionStatus(sectionIndex, "accepted");
+            break;
+        case "reject":
+            setSectionStatus(sectionIndex, "rejected");
+            break;
+        case "redo":
+            openRedoModal(sectionIndex);
+            break;
+        case "switch":
+            redoSection(sectionIndex, { mode: btn.dataset.mode });
+            break;
     }
 });
 
@@ -549,6 +677,17 @@ el("btn-prepare").addEventListener("click", () => prepare(true));
 el("btn-apply").addEventListener("click", applyChanges);
 el("redo-cancel").addEventListener("click", closeRedoModal);
 el("redo-submit").addEventListener("click", submitRedo);
+el("btn-delete-selected").addEventListener("click", deleteSelectedSessions);
+el("manage-check-all").addEventListener("change", (e) => {
+    manageCheckboxes().forEach((b) => (b.checked = e.target.checked));
+    updateManageSelection();
+});
+document.querySelectorAll('input[name="grammar-mode"]').forEach((input) =>
+    input.addEventListener("change", () =>
+        safeStorageSet(MODE_STORAGE_KEY, currentMode()),
+    ),
+);
+setModePicker(safeStorageGet(MODE_STORAGE_KEY) === "rewrite" ? "rewrite" : "light");
 
 // 重新整理網頁時，回到上次停留的分頁（日文校對／事實查核／草稿管理），
 // 而不是每次都跳回日文校對。第一次使用、或存的值不是三個分頁之一時，才 fallback 回日文校對。

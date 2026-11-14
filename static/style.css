@@ -7,7 +7,6 @@
     --theme: #2f6b4f;
     --theme-soft: #f2f7f4;
     --theme-strong: #e0eee6;
-    --content-max-width: 1400px;
 }
 
 /* 事實查核 */
@@ -38,9 +37,9 @@ body {
     height: 100vh;
 }
 .sidebar {
-    width: 300px;
-    border-right: 4px solid var(--theme);
-    padding: 16px;
+    width: 18.75rem;
+    border-right: 0.25rem solid var(--theme);
+    padding: 1rem;
     overflow-y: auto;
     background: var(--theme-soft);
     transition:
@@ -51,37 +50,37 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 6px;
-    margin-bottom: 16px;
+    gap: 0.375rem;
+    margin-bottom: 1rem;
 }
 .sidebar-icon {
-    width: 90px;
-    height: 90px;
-    border-radius: 12px;
+    width: 5.625rem;
+    height: 5.625rem;
+    border-radius: 0.75rem;
     object-fit: cover;
     flex: none;
 }
 .sidebar h1 {
     font-family: "Rampart One", sans-serif;
-    font-size: 18px;
+    font-size: 1.125rem;
     margin: 0;
     color: var(--theme);
     text-align: center;
 }
 .tabs {
     display: flex;
-    gap: 4px;
-    margin-bottom: 12px;
-    border-bottom: 1px solid var(--border);
-    padding-bottom: 8px;
+    gap: 0.25rem;
+    margin-bottom: 0.75rem;
+    border-bottom: 0.0625rem solid var(--border);
+    padding-bottom: 0.5rem;
 }
 .tab-btn {
     flex: 1;
-    padding: 6px 4px;
-    border: 1px solid var(--border);
+    padding: 0.375rem 0.25rem;
+    border: 0.0625rem solid var(--border);
     background: #fff;
-    border-radius: 6px;
-    font-size: 12px;
+    border-radius: 0.375rem;
+    font-size: 0.75rem;
     cursor: pointer;
     color: #666;
 }
@@ -97,21 +96,21 @@ body {
 .warn-box,
 .stale-banner {
     background: #fff3e0;
-    border: 1px solid #f0c68a;
-    border-radius: 6px;
+    border: 0.0625rem solid #f0c68a;
+    border-radius: 0.375rem;
 }
 .warn-box {
-    padding: 8px 10px;
-    font-size: 12px;
-    margin-bottom: 10px;
+    padding: 0.5rem 0.625rem;
+    font-size: 0.75rem;
+    margin-bottom: 0.625rem;
 }
 #search {
     width: 100%;
-    padding: 8px 10px;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    margin-bottom: 10px;
-    font-size: 13px;
+    padding: 0.5rem 0.625rem;
+    border: 0.0625rem solid var(--border);
+    border-radius: 0.375rem;
+    margin-bottom: 0.625rem;
+    font-size: 0.8125rem;
     background: #fff;
 }
 #search:focus {
@@ -121,10 +120,10 @@ body {
 .draft-first-toggle {
     display: flex;
     align-items: center;
-    gap: 6px;
-    font-size: 12px;
+    gap: 0.375rem;
+    font-size: 0.75rem;
     color: #666;
-    margin: -4px 0 10px;
+    margin: -0.25rem 0 0.625rem;
     cursor: pointer;
 }
 .draft-first-toggle input {
@@ -134,13 +133,13 @@ body {
 .post-list {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 0.125rem;
 }
 .post-item {
-    padding: 8px 10px;
-    border-radius: 6px;
+    padding: 0.5rem 0.625rem;
+    border-radius: 0.375rem;
     cursor: pointer;
-    font-size: 13px;
+    font-size: 0.8125rem;
     line-height: 1.4;
 }
 .post-item:hover {
@@ -152,19 +151,19 @@ body {
 }
 .post-item .meta {
     color: #999;
-    font-size: 11px;
+    font-size: 0.6875rem;
 }
 .post-item .dot {
     color: var(--accent);
-    margin-left: 4px;
+    margin-left: 0.25rem;
 }
 .badge {
     display: inline-block;
-    font-size: 10px;
+    font-size: 0.625rem;
     line-height: 1;
-    padding: 2px 4px;
-    border-radius: 4px;
-    margin-left: 4px;
+    padding: 0.125rem 0.25rem;
+    border-radius: 0.25rem;
+    margin-left: 0.25rem;
     font-weight: 700;
     color: #fff;
 }
@@ -178,7 +177,7 @@ body {
 .content {
     flex: 1;
     overflow-y: auto;
-    padding: 24px 32px;
+    padding: 1.5rem 2rem;
 }
 .empty-state,
 .manage-view {
@@ -193,38 +192,45 @@ body {
 .empty-state {
     color: #999;
     text-align: center;
-    font-size: 20px;
+    font-size: 1.25rem;
 }
 
 .editor-header {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 1rem;
     flex-wrap: wrap;
-    margin-bottom: 12px;
+    margin-bottom: 0.75rem;
 }
 .editor-header h2 {
     margin: 0;
-    font-size: 18px;
+    font-size: 1.125rem;
+}
+/* 模式選擇在上、按鈕列在下，整組靠右 */
+.editor-controls {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.75rem;
+    margin-left: auto;
 }
 .editor-actions {
     display: flex;
     align-items: center;
-    gap: 10px;
-    margin-left: auto;
+    gap: 0.625rem;
 }
 .summary {
-    font-size: 12px;
+    font-size: 0.75rem;
     color: #555;
 }
 
 .btn {
-    padding: 8px 14px;
-    border-radius: 6px;
-    border: 1px solid var(--border);
+    padding: 0.5rem 0.875rem;
+    border-radius: 0.375rem;
+    border: 0.0625rem solid var(--border);
     background: #fff;
     cursor: pointer;
-    font-size: 13px;
+    font-size: 0.8125rem;
 }
 .btn:disabled {
     opacity: 0.4;
@@ -243,47 +249,46 @@ body {
 
 .warnings {
     color: #a35b00;
-    font-size: 12px;
-    margin-bottom: 8px;
+    font-size: 0.75rem;
+    margin-bottom: 0.5rem;
 }
 .applied-banner {
     background: #e7f0ea;
-    border: 1px solid var(--accent);
-    padding: 8px 12px;
-    border-radius: 6px;
-    font-size: 13px;
-    margin-bottom: 12px;
+    border: 0.0625rem solid var(--accent);
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.375rem;
+    font-size: 0.8125rem;
+    margin-bottom: 0.75rem;
 }
 .stale-banner {
     color: #8a5a00;
-    padding: 8px 12px;
-    font-size: 13px;
-    margin-bottom: 12px;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8125rem;
+    margin-bottom: 0.75rem;
 }
 .factcheck-skill-hint {
-    padding: 16px 18px;
-    font-size: 14px;
+    padding: 1rem 1.125rem;
+    font-size: 0.875rem;
     line-height: 1.8;
-    margin-bottom: 14px;
-    max-width: var(--content-max-width);
+    margin-bottom: 0.875rem;
 }
 .fsh-intro {
-    margin: 0 0 10px;
+    margin: 0 0 0.625rem;
 }
 .fsh-footer {
-    margin: 10px 0 0;
-    font-size: 12px;
+    margin: 0.625rem 0 0;
+    font-size: 0.75rem;
     color: #4d7591;
 }
 .fsh-command {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 0.625rem;
     width: 100%;
     background: #fff;
-    border: 1px dashed #8fb6d6;
-    border-radius: 6px;
-    padding: 10px 14px;
+    border: 0.0625rem dashed #8fb6d6;
+    border-radius: 0.375rem;
+    padding: 0.625rem 0.875rem;
     cursor: pointer;
     font-family: inherit;
     text-align: left;
@@ -300,14 +305,14 @@ body {
     border: none;
     padding: 0;
     color: #17324a;
-    font-size: 14px;
+    font-size: 0.875rem;
     font-weight: 600;
     white-space: normal;
     word-break: break-word;
 }
 .fsh-copy-icon {
     flex: none;
-    font-size: 15px;
+    font-size: 0.9375rem;
 }
 .fsh-command.copied {
     background: #eaf6ee;
@@ -324,59 +329,58 @@ body {
 }
 .tp-cite {
     display: inline-block;
-    font-size: 11px;
+    font-size: 0.6875rem;
     background: #eef4fb;
-    border: 1px solid #b9d3ec;
+    border: 0.0625rem solid #b9d3ec;
     color: #2c536f;
-    border-radius: 4px;
-    padding: 0 4px;
+    border-radius: 0.25rem;
+    padding: 0 0.25rem;
     cursor: help;
     vertical-align: middle;
 }
 
 .tp-note {
     display: block;
-    margin: 4px 0 10px;
-    padding: 6px 10px;
+    margin: 0.25rem 0 0.625rem;
+    padding: 0.375rem 0.625rem;
     background: #fdf7ec;
-    border: 1px solid #ecd9a8;
-    border-left: 3px solid #c99a3a;
-    border-radius: 0 6px 6px 0;
-    font-size: 13px;
+    border: 0.0625rem solid #ecd9a8;
+    border-left: 0.1875rem solid #c99a3a;
+    border-radius: 0 0.375rem 0.375rem 0;
+    font-size: 0.8125rem;
     line-height: 1.6;
 }
 .tp-note-icon {
-    margin-right: 4px;
+    margin-right: 0.25rem;
 }
 .tp-note-text {
     color: #6b5518;
 }
 .tp-note-sources {
     display: block;
-    margin-top: 4px;
-    font-size: 12px;
+    margin-top: 0.25rem;
+    font-size: 0.75rem;
 }
 .tp-note-sources a {
     color: #2c536f;
-    margin-right: 8px;
+    margin-right: 0.5rem;
 }
 
 .title-panel,
 .review-content,
 .manage-table {
     background: #fff;
-    border: 1px solid var(--border);
-    border-radius: 8px;
+    border: 0.0625rem solid var(--border);
+    border-radius: 0.5rem;
 }
 .title-panel {
-    padding: 14px 18px;
-    margin-bottom: 14px;
-    max-width: var(--content-max-width);
-    font-size: 13px;
+    padding: 0.875rem 1.125rem;
+    margin-bottom: 0.875rem;
+    font-size: 0.8125rem;
 }
 .title-panel .tp-title-note {
     color: #666;
-    margin-bottom: 8px;
+    margin-bottom: 0.5rem;
 }
 .title-panel .tp-title-note.ok {
     color: var(--accent);
@@ -387,45 +391,37 @@ body {
 .title-option {
     display: flex;
     align-items: flex-start;
-    gap: 8px;
-    padding: 6px 4px;
-    border-radius: 6px;
+    gap: 0.5rem;
+    padding: 0.375rem 0.25rem;
+    border-radius: 0.375rem;
     cursor: pointer;
 }
 .title-option:hover {
     background: #f6f4ef;
 }
 .title-option input {
-    margin-top: 3px;
+    margin-top: 0.1875rem;
 }
 .title-option .label-tag {
-    font-size: 11px;
+    font-size: 0.6875rem;
     color: #999;
-    margin-right: 4px;
+    margin-right: 0.25rem;
 }
 
 .review-content {
-    padding: 24px 28px;
+    padding: 1.5rem 1.75rem;
     line-height: 1.9;
-    font-size: 15px;
-    max-width: var(--content-max-width);
+    font-size: 0.9375rem;
 }
 .review-content img {
     max-width: 100%;
 }
 
 .tp-change {
-    position: relative;
-    padding: 0 1px;
-    border-radius: 3px;
-}
-.tp-change.accepted {
+    padding: 0 0.0625rem;
+    border-radius: 0.1875rem;
     background: rgba(47, 107, 79, 0.08);
 }
-.tp-change.rejected {
-    background: rgba(179, 64, 42, 0.06);
-}
-
 .tp-del {
     color: var(--danger);
     text-decoration: line-through;
@@ -437,106 +433,288 @@ body {
     font-weight: 600;
 }
 
-.tp-change.accepted .tp-del {
-    display: inline;
+/* ── 日文校對：H2 段落卡片 ── */
+.review-content.sections {
+    padding: 0;
+    background: none;
+    border: none;
 }
-.tp-change.accepted .tp-ins {
-    display: inline;
+.sec-card {
+    background: #fff;
+    border: 0.0625rem solid var(--border);
+    border-left: 0.25rem solid var(--border);
+    border-radius: 0.5rem;
+    margin-bottom: 0.875rem;
+    overflow: hidden;
 }
-.tp-change.rejected .tp-ins {
+.sec-card.is-changed.is-accepted {
+    border-left-color: var(--accent);
+}
+.sec-card.is-changed.is-rejected {
+    border-left-color: var(--danger);
+}
+.sec-card.is-busy {
+    opacity: 0.45;
+    pointer-events: none;
+}
+.sec-head {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding: 0.5rem 0.875rem;
+    background: var(--theme-soft);
+    border-bottom: 0.0625rem solid var(--border);
+    font-size: 0.8125rem;
+    line-height: 1.4;
+}
+.sec-no {
+    flex: none;
+    min-width: 1.375rem;
+    height: 1.375rem;
+    border-radius: 0.6875rem;
+    background: var(--theme);
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 0.375rem;
+}
+.sec-title {
+    font-weight: 600;
+}
+.sec-mode,
+.sec-stat {
+    font-size: 0.6875rem;
+    border-radius: 0.25rem;
+    padding: 0.125rem 0.375rem;
+    background: #efece5;
+    color: #555;
+}
+.sec-card.mode-rewrite .sec-mode {
+    background: #6b5b95;
+    color: #fff;
+}
+.sec-card.is-changed .sec-stat {
+    background: var(--theme-strong);
+    color: var(--theme);
+    font-weight: 600;
+}
+.sec-actions {
+    display: flex;
+    gap: 0.375rem;
+    margin-left: auto;
+    flex-wrap: wrap;
+}
+.sec-btn {
+    border: 0.0625rem solid var(--border);
+    background: #fff;
+    border-radius: 0.375rem;
+    padding: 0.1875rem 0.625rem;
+    font-size: 0.75rem;
+    cursor: pointer;
+    color: #444;
+}
+.sec-btn:hover {
+    background: #f6f4ef;
+}
+.sec-btn.sec-accept.on {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+}
+.sec-btn.sec-reject.on {
+    background: var(--danger);
+    border-color: var(--danger);
+    color: #fff;
+}
+/* 已套用覆蓋原文的草稿：段落操作都鎖起來，只能看不能點 */
+.review-content.is-applied .sec-actions {
+    display: none;
+}
+.sec-note,
+.sec-warn {
+    margin: 0.625rem 0.875rem 0;
+    padding: 0.375rem 0.625rem;
+    border-radius: 0 0.375rem 0.375rem 0;
+    font-size: 0.8125rem;
+    line-height: 1.6;
+}
+.sec-note {
+    background: #f3f0f9;
+    border-left: 0.1875rem solid #6b5b95;
+    color: #47395f;
+}
+.sec-warn {
+    background: #fff3e0;
+    border-left: 0.1875rem solid #f0a64a;
+    color: #8a5a00;
+}
+.sec-body {
+    padding: 0.5rem 1.25rem 0.75rem;
+}
+.sec-body img,
+.sec-body iframe {
+    max-width: 100%;
+}
+.sec-body h2 {
+    font-size: 1.125rem;
+}
+/* 維持原文的段落：修改用淡色劃掉，原文恢復正常顯示 */
+.sec-card.is-rejected .tp-ins {
     text-decoration: line-through;
     opacity: 0.4;
 }
-.tp-change.rejected .tp-del {
+.sec-card.is-rejected .tp-del {
     text-decoration: none;
     opacity: 1;
     font-weight: 600;
 }
-
-.tp-ctrl {
-    display: inline-flex;
-    gap: 5px;
-    margin-left: 4px;
-    vertical-align: middle;
-    opacity: 0.55;
+.sec-compare {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
 }
-.tp-change:hover .tp-ctrl {
-    opacity: 1;
+.sec-col {
+    min-width: 0;
+    padding: 0 0.75rem;
+    border-radius: 0.375rem;
 }
-
-/* 已套用覆蓋原文的草稿：勾/叉/重新調整都鎖起來，只能看不能點 */
-.review-content.is-applied .tp-ctrl {
-    display: none;
+.sec-col-orig {
+    background: #faf8f4;
+    color: #666;
 }
-.review-content.is-applied .tp-change:hover {
-    cursor: default;
+.sec-col-new {
+    background: #f2f7f4;
 }
-.tp-btn {
-    border: none;
-    background: #efece5;
-    border-radius: 6px;
-    width: 24px;
-    height: 24px;
-    font-size: 20px;
+.sec-card.is-rejected .sec-col-orig {
+    background: #fff;
+    color: inherit;
+}
+.sec-card.is-rejected .sec-col-new {
+    opacity: 0.45;
+}
+/* 段落重寫：受影響的句子（改了字、被移動、合併或拆開），原文和改寫後都標示 */
+.sec-hl {
+    border-radius: 0.1875rem;
+    padding: 0.05em 0;
+    color: inherit;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+}
+.sec-col-orig .sec-hl {
+    background: #fde2dc;
+}
+.sec-col-new .sec-hl {
+    background: #fff0a8;
+}
+.sec-card.is-rejected .sec-col-new .sec-hl {
+    background: #f1efe9;
+}
+.sec-col-label {
+    position: sticky;
+    top: 0;
+    padding: 0.375rem 0 0;
+    font-size: 0.6875rem;
     font-weight: 700;
-    line-height: 1;
+    color: #888;
+}
+.sec-col img {
+    max-width: 60%;
+}
+@media (max-width: 56.25rem) {
+    .sec-compare {
+        grid-template-columns: 1fr;
+    }
+}
+
+.mode-picker {
+    display: inline-flex;
+    border: 0.0625rem solid var(--border);
+    border-radius: 0.375rem;
+    overflow: hidden;
+    font-size: 0.8125rem;
+    background: #fff;
+}
+.mode-picker label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.375rem 0.625rem;
     cursor: pointer;
-    padding: 0;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
-.tp-btn:hover {
-    filter: brightness(0.95);
-    transform: scale(1.05);
+.mode-picker label + label {
+    border-left: 0.0625rem solid var(--border);
 }
-.tp-btn.tp-accept {
-    color: #fff;
-    background: var(--accent);
-}
-.tp-btn.tp-reject {
-    color: #fff;
-    background: var(--danger);
-}
-.tp-btn.tp-redo {
-    color: #7a6b3c;
-    font-size: 17px;
+.mode-picker input {
+    accent-color: var(--theme);
+    margin: 0;
 }
 
 .manage-view {
-    max-width: var(--content-max-width);
+    max-width: 87.5rem; /* 草稿管理維持最寬 1400px（其他畫面不限寬度） */
 }
 .manage-view h2 {
-    margin: 0 0 6px;
-    font-size: 18px;
+    margin: 0 0 0.375rem;
+    font-size: 1.125rem;
 }
 .manage-view .hint {
     color: #777;
-    font-size: 12px;
-    margin: 0 0 16px;
+    font-size: 0.75rem;
+    margin: 0 0 1rem;
+}
+.manage-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+}
+.manage-count {
+    font-size: 0.75rem;
+    color: #555;
+}
+.manage-toolbar .btn {
+    margin-left: auto;
+}
+.manage-table .col-check {
+    width: 2.25rem;
+    text-align: center;
+}
+.manage-table .col-check input {
+    cursor: pointer;
+    accent-color: var(--theme);
+}
+.manage-table .col-no {
+    width: 2.75rem;
+    color: #888;
+    font-variant-numeric: tabular-nums;
 }
 .manage-table {
     width: 100%;
     border-collapse: collapse;
     overflow: hidden;
-    font-size: 13px;
+    font-size: 0.8125rem;
 }
 .manage-table th,
 .manage-table td {
     text-align: left;
-    padding: 8px 12px;
-    border-bottom: 1px solid var(--border);
+    padding: 0.5rem 0.75rem;
+    border-bottom: 0.0625rem solid var(--border);
 }
 .manage-table th {
     background: var(--theme-strong);
     font-weight: 600;
-    font-size: 12px;
+    font-size: 0.75rem;
     color: #555;
 }
 .manage-table tr:last-child td {
     border-bottom: none;
 }
 .btn-sm {
-    padding: 4px 10px;
-    font-size: 12px;
+    padding: 0.25rem 0.625rem;
+    font-size: 0.75rem;
 }
 
 .modal {
@@ -549,22 +727,22 @@ body {
 }
 .modal-box {
     background: #fff;
-    border-radius: 10px;
-    padding: 20px;
-    width: 380px;
+    border-radius: 0.625rem;
+    padding: 1.25rem;
+    width: 23.75rem;
 }
 .modal-box h3 {
-    margin: 0 0 8px;
-    font-size: 15px;
+    margin: 0 0 0.5rem;
+    font-size: 0.9375rem;
 }
 .modal-hint {
-    font-size: 12px;
+    font-size: 0.75rem;
     color: #777;
-    margin: 0 0 10px;
+    margin: 0 0 0.625rem;
 }
 .app-modal-message {
-    margin: 0 0 16px;
-    font-size: 14px;
+    margin: 0 0 1rem;
+    font-size: 0.875rem;
     line-height: 1.7;
     color: #2b2a28;
     white-space: pre-wrap;
@@ -572,14 +750,36 @@ body {
 }
 .modal-box textarea {
     width: 100%;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 8px;
-    font-size: 13px;
+    border: 0.0625rem solid var(--border);
+    border-radius: 0.375rem;
+    padding: 0.5rem;
+    font-size: 0.8125rem;
+}
+/* 「要求重新調整這一段」彈窗：可能要輸入很多描述，所以放大。
+   想調大小只要改下面兩個變數：--redo-width（寬）、--redo-height（高），單位 vw / vh = 畫面寬 / 高的百分比。 */
+.modal-box.modal-redo {
+    --redo-width: 50vw;
+    --redo-height: 50vh;
+    width: var(--redo-width);
+    height: var(--redo-height);
+    min-width: min(30rem, 95vw); /* 小螢幕時不會窄到不好打字 */
+    min-height: 20rem;
+    max-width: 95vw;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+}
+.modal-redo textarea {
+    flex: 1; /* 輸入框自動填滿彈窗剩下的高度 */
+    min-height: 0;
+    resize: none;
+    font-size: 0.9375rem;
+    line-height: 1.7;
+    font-family: inherit;
 }
 .modal-actions {
     display: flex;
     justify-content: flex-end;
-    gap: 8px;
-    margin-top: 10px;
+    gap: 0.5rem;
+    margin-top: 0.625rem;
 }
